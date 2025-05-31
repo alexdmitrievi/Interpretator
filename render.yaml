@@ -1,0 +1,15 @@
+services:
+  - type: worker
+    name: interpretator-bot
+    runtime: python
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python bot.py
+    region: frankfurt
+    plan: free
+    envVars:
+      - key: TELEGRAM_TOKEN
+        value: your_telegram_api_token_here
+      - key: OPENAI_API_KEY
+        value: your_openai_api_key_here
+
