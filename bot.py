@@ -1,5 +1,4 @@
 import asyncio
-import os
 import requests
 from datetime import datetime
 import pytz
@@ -16,10 +15,14 @@ from config import (
 
 from parser import get_important_events
 from interpreter import btc_eth_forecast
-
 from openai import AsyncOpenAI
 
-# Инициализация GPT-клиента без ручных заголовков (OpenAI сам извлечёт Project ID из ключа)
+# 🛡️ Проверка API-ключа
+print("[DEBUG] OPENAI_API_KEY =", OPENAI_API_KEY)
+if not OPENAI_API_KEY:
+    raise RuntimeError("❌ OPENAI_API_KEY is None. Проверь .env и config.py")
+
+# ✅ GPT-клиент
 client = AsyncOpenAI(api_key=OPENAI_API_KEY)
 
 main_keyboard = ReplyKeyboardMarkup(
@@ -57,7 +60,6 @@ async def publish_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if str(update.effective_user.id) != str(OWNER_ID):
         await update.message.reply_text("⛔ У тебя нет прав на публикацию.")
         return
-
     await publish_welcome_post(context.application)
     await update.message.reply_text("✅ Пост опубликован в канал.")
 
@@ -106,26 +108,18 @@ async def assess_altseason(update: Update, context: ContextTypes.DEFAULT_TYPE):
         data = r.json()
         btc_d = round(data["data"]["market_cap_percentage"]["btc"], 2)
         eth_d = round(data["data"]["market_cap_percentage"]["eth"], 2)
-
         eth_btc_resp = requests.get("https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=btc", timeout=10)
         eth_btc_data = eth_btc_resp.json()
-
-        if "ethereum" not in eth_btc_data or "btc" not in eth_btc_data["ethereum"]:
-            raise ValueError("Пара ETH/BTC не найдена в ответе CoinGecko")
-
         eth_btc = round(eth_btc_data["ethereum"]["btc"], 5)
-
         prompt = (
             f"BTC Dominance: {btc_d}%\nETH Dominance: {eth_d}%\nETH/BTC: {eth_btc}\n"
-            "На основе этих показателей оцени, насколько вероятен альтсезон."
-            " Ответь кратко: 1) оценка вероятности, 2) аргументы, 3) общее заключение."
+            "На основе этих показателей оцени, насколько вероятен альтсезон.\n"
+            "Ответь кратко: 1) оценка вероятности, 2) аргументы, 3) общее заключение."
         )
-
         response = await client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[{"role": "user", "content": prompt}]
         )
-
         result = (
             f"📊 Оценка альтсезона:\n\n"
             f"▪️ BTC Dominance: {btc_d}%\n"
@@ -134,7 +128,6 @@ async def assess_altseason(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"🧠 GPT: {response.choices[0].message.content.strip()}"
         )
         await update.message.reply_text(result, reply_markup=main_keyboard)
-
     except Exception as e:
         print(f"[ОШИБКА альтсезона]: {e}")
         await update.message.reply_text(f"⚠️ Ошибка при оценке альтсезона: {e}", reply_markup=main_keyboard)
@@ -172,30 +165,24 @@ async def gpt_interpretation(event, actual, forecast):
             messages=[{"role": "user", "content": prompt}]
         )
         content = response.choices[0].message.content.strip()
-
         text_lower = content.lower()
         is_bullish = any(word in text_lower for word in ["катализатор", "приток ликвидности", "сильный рост"])
         is_bearish = any(word in text_lower for word in ["разворот", "медвежий", "обвал", "уход в риски"])
-
         return content, is_bullish, is_bearish
     except Exception as e:
         return f"⚠️ Ошибка GPT: {e}", False, False
 
 async def send_digest(chat_id, context, debug=False):
     events = get_important_events(debug=debug)
-
     if not events:
         await context.bot.send_message(chat_id=chat_id, text="🔍 Сейчас нет важных новостей.", reply_markup=main_keyboard)
         return
-
     if "error" in events[0]:
         await context.bot.send_message(chat_id=chat_id, text=f"⚠️ {events[0]['error']}", reply_markup=main_keyboard)
         return
-
     for e in events:
         bull_emoji = "🐂" * e.get("bulls", 0)
         header = f"{bull_emoji} {e['event']}"
-
         text = (
             f"📊 {header}\n"
             f"🕒 Время: {e['time']}\n"
@@ -203,7 +190,6 @@ async def send_digest(chat_id, context, debug=False):
             f"{e['summary']}\n"
             f"🔮 Вероятность: {e['probability']}%"
         )
-
         if not debug and e.get("bulls") == 3:
             try:
                 delta = float(e['actual']) - float(e['forecast'])
@@ -211,7 +197,6 @@ async def send_digest(chat_id, context, debug=False):
                 text += f"\n\n💡 {forecast}"
             except:
                 pass
-
         if not debug:
             gpt_comment, is_bullish, is_bearish = await gpt_interpretation(e['event'], e['actual'], e['forecast'])
             text += f"\n\n🧠 Мнение аналитика:\n{gpt_comment}"
@@ -219,32 +204,17 @@ async def send_digest(chat_id, context, debug=False):
                 text += "\n\n🚀 Потенциальный катализатор роста"
             if is_bearish:
                 text += "\n\n⚠️ Возможный разворот тренда в медвежью фазу"
-
         await context.bot.send_message(chat_id=chat_id, text=text, reply_markup=main_keyboard)
 
 async def auto_loop(app: Application):
-    from telegram import InlineKeyboardMarkup
-
-    await asyncio.sleep(60)  # Подождать минуту после запуска
-
+    await asyncio.sleep(60)
     while True:
         try:
             await send_digest(OWNER_ID, app, debug=False)
-
-            moscow = pytz.timezone("Europe/Moscow")
-            now = datetime.now(moscow).strftime("%H:%M")
-
-            await app.bot.send_message(
-                chat_id=OWNER_ID,
-                text=f"⏰ Цикл завершён в {now} (МСК). Следующее обновление через 3 часа."
-            )
-
+            now = datetime.now(pytz.timezone("Europe/Moscow")).strftime("%H:%M")
+            await app.bot.send_message(chat_id=OWNER_ID, text=f"⏰ Цикл завершён в {now} (МСК). Следующее обновление через 3 часа.")
         except Exception as e:
-            await app.bot.send_message(
-                chat_id=OWNER_ID,
-                text=f"❌ Ошибка: {e}"
-            )
-
+            await app.bot.send_message(chat_id=OWNER_ID, text=f"❌ Ошибка: {e}")
         await asyncio.sleep(3 * 3600)
 
 async def after_startup(app: Application):
@@ -257,8 +227,6 @@ async def after_startup(app: Application):
         BotCommand("alts", "Оценить альтсезон"),
         BotCommand("publish", "Опубликовать приветственный пост")
     ])
-
-    # Запускаем только авторассылку в личку OWNER_ID
     asyncio.create_task(auto_loop(app))
 
 def main():
@@ -271,6 +239,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
