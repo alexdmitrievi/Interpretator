@@ -18,16 +18,30 @@ def get_important_events():
     results = []
 
     for row in soup.select("tr.js-event-item"):
-        bull_icons = row.select(".grayFullBullishIcon")
-        impact = len(bull_icons)
-        if impact < 2:
+        # Находим уровень важности по title в .sentiment
+        sentiment = row.select_one(".sentiment")
+        if not sentiment:
             continue
+
+        title = sentiment.get("title", "").lower()
+        if "medium" in title:
+            bulls = 2
+        elif "high" in title:
+            bulls = 3
+        else:
+            continue  # пропускаем low impact или неизвестные
 
         try:
             event = row.select_one(".event").text.strip()
             time = row.get("data-event-datetime")
-            actual = row.select_one(".actual").text.strip().replace('%', '').replace(',', '.')
-            forecast = row.select_one(".forecast").text.strip().replace('%', '').replace(',', '.')
+            actual_tag = row.select_one(".actual")
+            forecast_tag = row.select_one(".forecast")
+
+            if not actual_tag or not forecast_tag:
+                continue
+
+            actual = actual_tag.text.strip().replace('%', '').replace(',', '.')
+            forecast = forecast_tag.text.strip().replace('%', '').replace(',', '.')
 
             if actual and forecast:
                 actual_val = float(actual)
@@ -41,7 +55,7 @@ def get_important_events():
                     "forecast": forecast,
                     "summary": summary,
                     "probability": probability,
-                    "bulls": impact
+                    "bulls": bulls
                 })
         except:
             continue
