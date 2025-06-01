@@ -23,8 +23,10 @@ from openai import AsyncOpenAI
 
 client = AsyncOpenAI(
     api_key=OPENAI_API_KEY,
-    organization=OPENAI_ORG_ID,
-    project=OPENAI_PROJECT_ID
+    default_headers={
+        "OpenAI-Organization": OPENAI_ORG_ID,
+        "OpenAI-Project": OPENAI_PROJECT_ID
+    }
 )
 
 main_keyboard = ReplyKeyboardMarkup(
