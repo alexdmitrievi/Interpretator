@@ -67,20 +67,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             eth_btc = round(eth_btc_data["ethereum"]["btc"], 5)
 
             prompt = (
-                f"BTC Dominance: {btc_d}%
-ETH Dominance: {eth_d}%
-ETH/BTC: {eth_btc}
-"
+                f"BTC Dominance: {btc_d}%\n"
+                f"ETH Dominance: {eth_d}%\n"
+                f"ETH/BTC: {eth_btc}\n"
                 "Оцени вероятность альтсезона."
             )
+
             response = await client.chat.completions.create(
                 model="gpt-3.5-turbo",
                 messages=[{"role": "user", "content": prompt}]
             )
             await update.message.reply_text(
-                f"📊 Альтсезон:
-
-{response.choices[0].message.content.strip()}",
+                f"📊 Альтсезон:\n\n{response.choices[0].message.content.strip()}",
                 reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True)
             )
         except Exception as e:
@@ -88,6 +86,7 @@ ETH/BTC: {eth_btc}
                 f"⚠️ Ошибка при получении данных альтсезона: {e}",
                 reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True)
             )
+
 
     elif text == "🧠 Интерпретировать новости":
         waiting_users.add(user_id)
