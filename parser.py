@@ -25,18 +25,15 @@ def get_important_events(debug=False):
             continue
 
         title = sentiment.get("title", "").lower()
-        if "medium" in title:
-            bulls = 2
-        elif "high" in title:
+        if "high" in title:
             bulls = 3
         else:
-            continue
+            continue  # пропускаем всё, кроме high impact (3 звезды)
 
         try:
             event = row.select_one(".event").text.strip()
             time_raw = row.get("data-event-datetime")
 
-            # Преобразуем UTC-время в МСК
             if time_raw:
                 utc_dt = datetime.strptime(time_raw, "%Y-%m-%d %H:%M:%S").replace(tzinfo=pytz.utc)
                 local_dt = utc_dt.astimezone(pytz.timezone("Europe/Moscow"))
@@ -78,6 +75,7 @@ def get_important_events(debug=False):
             continue
 
     return results
+
 
 
 
