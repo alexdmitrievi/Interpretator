@@ -14,11 +14,15 @@ client = AsyncOpenAI(api_key=OPENAI_API_KEY)
 reply_keyboard = [["🧠 Интерпретировать новости"], ["📉 Прогноз по BTC", "📉 Прогноз по ETH"], ["📊 Оценить альтсезон"]]
 menu_keyboard = [["🔁 Перезапустить бота"], ["📢 Опубликовать пост"]]
 
+# Пользователи, которые ждут автоматическую интерпретацию следующей новости
+waiting_users = set()
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("👋 Привет! Выбери действие ниже:", reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True))
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
+    user_id = update.effective_user.id
 
     if text == "📉 Прогноз по BTC":
         context.user_data["price_asset"] = "BTC"
@@ -67,30 +71,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(f"Ошибка: {e}", reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True))
 
     elif text == "🧠 Интерпретировать новости":
-        context.user_data["awaiting_event"] = True
-        await update.message.reply_text("Напиши событие в формате:\n`Ставка ФРС: факт 5.5%, прогноз 5.25%`", parse_mode="Markdown")
-
-    elif context.user_data.get("awaiting_event"):
-        context.user_data.pop("awaiting_event")
-        try:
-            match = re.search(r"(.*?): факт\s*([\d.,%]+),?\s*прогноз\s*([\d.,%]+)", text, re.IGNORECASE)
-            if not match:
-                raise ValueError("Формат не распознан")
-            event, actual, forecast = match.groups()
-            actual_val = float(actual.replace('%', '').replace(',', '.'))
-            forecast_val = float(forecast.replace('%', '').replace(',', '.'))
-            prompt = (
-                f"Событие: {event}\n"
-                f"Факт: {actual_val} | Прогноз: {forecast_val}\n\n"
-                "Как это повлияет на доллар, рынок и крипту? Кратко."
-            )
-            response = await client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[{"role": "user", "content": prompt}]
-            )
-            await update.message.reply_text(f"🧠 Интерпретация:\n\n{response.choices[0].message.content.strip()}", reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True))
-        except Exception as e:
-            await update.message.reply_text(f"❌ Ошибка: {e}", reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True))
+        waiting_users.add(user_id)
+        await update.message.reply_text("⏳ Жду ближайшее важное событие. Интерпретация придёт автоматически!", reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True))
 
     elif text == "🔁 Перезапустить бота":
         await start(update, context)
@@ -116,6 +98,7 @@ async def publish_post(update: Update):
     await update.message.reply_text(text, reply_markup=keyboard)
 
 async def hourly_news_check(app):
+    global waiting_users
     await asyncio.sleep(10)
     while True:
         try:
@@ -143,10 +126,13 @@ async def hourly_news_check(app):
                             f"{e['summary']}\n\n"
                             f"🧠 Интерпретация GPT:\n{interpretation}"
                         )
-                        for user_id in [app.bot.owner_id]:
+                        # отправляем только тем, кто ждёт интерпретацию
+                        for user_id in waiting_users:
                             await app.bot.send_message(chat_id=user_id, text=summary, reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True))
+                        waiting_users.clear()
                     except Exception as ex:
                         logging.error(f"Ошибка автоинтерпретации: {ex}")
+                        continue
         except Exception as e:
             logging.error(f"Ошибка в парсинге новостей: {e}")
         await asyncio.sleep(3600)
@@ -168,6 +154,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
