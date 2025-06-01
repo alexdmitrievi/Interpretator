@@ -11,9 +11,7 @@ from config import (
     TELEGRAM_TOKEN,
     CHAT_ID,
     OWNER_ID,
-    OPENAI_API_KEY,
-    OPENAI_ORG_ID,
-    OPENAI_PROJECT_ID
+    OPENAI_API_KEY
 )
 
 from parser import get_important_events
@@ -21,12 +19,8 @@ from interpreter import btc_eth_forecast
 
 from openai import AsyncOpenAI
 
-client = AsyncOpenAI(
-    api_key=OPENAI_API_KEY,
-    default_headers={
-        "OpenAI-Project": OPENAI_PROJECT_ID
-    }
-)
+# Инициализация GPT-клиента без ручных заголовков (OpenAI сам извлечёт Project ID из ключа)
+client = AsyncOpenAI(api_key=OPENAI_API_KEY)
 
 main_keyboard = ReplyKeyboardMarkup(
     [
