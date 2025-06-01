@@ -186,16 +186,33 @@ async def send_digest(chat_id, context, debug=False):
         await context.bot.send_message(chat_id=chat_id, text=text, reply_markup=keyboard)
 
 async def auto_loop(app: Application):
-    await asyncio.sleep(60)
+    from telegram import InlineKeyboardMarkup
+
+    await asyncio.sleep(60)  # Подождать минуту после запуска
+
+    keyboard = InlineKeyboardMarkup([])  # Замените на нужные кнопки, если они есть
+
     while True:
         try:
             await send_digest(CHAT_ID, app, debug=False)
+
             moscow = pytz.timezone("Europe/Moscow")
             now = datetime.now(moscow).strftime("%H:%M")
-            await app.bot.send_message(chat_id=chat_id, text=f"⏰ Цикл завершён в {now} (МСК). Следующее обновление через 60 минут.", reply_markup=keyboard)
+
+            await app.bot.send_message(
+                chat_id=CHAT_ID,
+                text=f"⏰ Цикл завершён в {now} (МСК). Следующее обновление через 3 часа.",
+                reply_markup=keyboard
+            )
+
         except Exception as e:
-            await context.bot.send_message(chat_id=chat_id, text=f"❌ Ошибка: {e}", reply_markup=keyboard)
-        await asyncio.sleep(3600)
+            await app.bot.send_message(
+                chat_id=CHAT_ID,
+                text=f"❌ Ошибка: {e}",
+                reply_markup=keyboard
+            )
+
+        await asyncio.sleep(3 * 3600)  # Подождать 3 часа до следующего запуска
 
 async def after_startup(app: Application):
     await app.bot.set_my_commands([
