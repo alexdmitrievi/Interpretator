@@ -1,9 +1,9 @@
 import asyncio
 import os
 import requests
-from telegram import Update, ReplyKeyboardMarkup, BotCommand
+from telegram import Update, ReplyKeyboardMarkup, BotCommand, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters
-from config import TELEGRAM_TOKEN, CHAT_ID, OPENAI_API_KEY
+from config import TELEGRAM_TOKEN, CHAT_ID, OPENAI_API_KEY, OWNER_ID
 from parser import get_important_events
 from datetime import datetime
 import pytz
@@ -23,6 +23,25 @@ main_keyboard = ReplyKeyboardMarkup(
     resize_keyboard=True,
     one_time_keyboard=False
 )
+
+async def publish_welcome_post(app: Application):
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🤖 Подключиться к боту", url="https://t.me/Parser_newbot")]
+    ])
+    text = (
+        "👋 Добро пожаловать в канал Mamkin Treder!\n\n"
+        "Я публикую здесь важные макроэкономические события, прогнозы по крипте и интерпретации новостей.\n\n"
+        "📍 Хочешь получать аналитику в личку? Жми кнопку ниже 👇"
+    )
+    await app.bot.send_message(chat_id=CHAT_ID, text=text, reply_markup=keyboard)
+
+async def publish_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if str(update.effective_user.id) != str(OWNER_ID):
+        await update.message.reply_text("⛔ У тебя нет прав на публикацию.")
+        return
+
+    await publish_welcome_post(context.application)
+    await update.message.reply_text("✅ Пост опубликован в канал.")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
@@ -221,7 +240,8 @@ async def after_startup(app: Application):
         BotCommand("upcoming", "Ожидаемые события"),
         BotCommand("btc", "Прогноз по BTC"),
         BotCommand("eth", "Прогноз по ETH"),
-        BotCommand("alts", "Оценить альтсезон")
+        BotCommand("alts", "Оценить альтсезон"),
+        BotCommand("publish", "Опубликовать приветственный пост")
     ])
     await app.bot.send_message(chat_id=CHAT_ID, text="🤖 Бот запущен. Я буду присылать макроэкономические события каждые 3 часа.", reply_markup=main_keyboard)
     asyncio.create_task(auto_loop(app))
@@ -229,12 +249,14 @@ async def after_startup(app: Application):
 def main():
     app = Application.builder().token(TELEGRAM_TOKEN).post_init(after_startup).build()
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("publish", publish_command))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     print("✅ Бот запущен")
     app.run_polling()
 
 if __name__ == "__main__":
     main()
+
 
 
 
