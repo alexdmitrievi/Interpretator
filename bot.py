@@ -12,7 +12,7 @@ from openai import AsyncOpenAI
 
 client = AsyncOpenAI(api_key=OPENAI_API_KEY)
 
-keyboard = ReplyKeyboardMarkup(
+main_keyboard = ReplyKeyboardMarkup(
     [
         ["🧠 Интерпретировать новости"],
         ["🔬 Посмотреть ожидаемые события"],
@@ -27,7 +27,7 @@ keyboard = ReplyKeyboardMarkup(
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "👋 Привет! Я интерпретирую макроэкономические новости.\nВыбери действие ниже:",
-        reply_markup=keyboard
+        reply_markup=main_keyboard
     )
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -39,10 +39,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif text == "🔁 Перезапустить бота":
         await start(update, context)
     elif text == "📉 Прогноз по BTC":
-        await update.message.reply_text("Введите текущую цену BTC (например, 104230):", reply_markup=keyboard)
+        await update.message.reply_text("Введите текущую цену BTC (например, 104230):", reply_markup=main_keyboard)
         context.user_data["awaiting_btc_price"] = True
     elif text == "📉 Прогноз по ETH":
-        await update.message.reply_text("Введите текущую цену ETH (например, 3820):", reply_markup=keyboard)
+        await update.message.reply_text("Введите текущую цену ETH (например, 3820):", reply_markup=main_keyboard)
         context.user_data["awaiting_eth_price"] = True
     elif text == "📊 Оценить альтсезон":
         await assess_altseason(update, context)
@@ -51,17 +51,17 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             price = float(text.replace(",", ".").replace("$", "").strip())
             forecast = await gpt_price_forecast("BTC", price)
-            await update.message.reply_text(forecast, reply_markup=keyboard)
+            await update.message.reply_text(forecast, reply_markup=main_keyboard)
         except ValueError:
-            await update.message.reply_text("Некорректная цена. Введите число, например: 103500", reply_markup=keyboard)
+            await update.message.reply_text("Некорректная цена. Введите число, например: 103500", reply_markup=main_keyboard)
     elif context.user_data.get("awaiting_eth_price"):
         context.user_data["awaiting_eth_price"] = False
         try:
             price = float(text.replace(",", ".").replace("$", "").strip())
             forecast = await gpt_price_forecast("ETH", price)
-            await update.message.reply_text(forecast, reply_markup=keyboard)
+            await update.message.reply_text(forecast, reply_markup=main_keyboard)
         except ValueError:
-            await update.message.reply_text("Некорректная цена. Введите число, например: 3820", reply_markup=keyboard)
+            await update.message.reply_text("Некорректная цена. Введите число, например: 3820", reply_markup=main_keyboard)
 
 async def assess_altseason(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
@@ -96,11 +96,11 @@ async def assess_altseason(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"▪️ ETH/BTC: {eth_btc}\n\n"
             f"🧠 GPT: {response.choices[0].message.content.strip()}"
         )
-        await update.message.reply_text(result, reply_markup=keyboard)
+        await update.message.reply_text(result, reply_markup=main_keyboard)
 
     except Exception as e:
         print(f"[ОШИБКА альтсезона]: {e}")
-        await update.message.reply_text(f"⚠️ Ошибка при оценке альтсезона: {e}", reply_markup=keyboard)
+        await update.message.reply_text(f"⚠️ Ошибка при оценке альтсезона: {e}", reply_markup=main_keyboard)
 
 async def gpt_price_forecast(asset, price):
     prompt = (
@@ -148,11 +148,11 @@ async def send_digest(chat_id, context, debug=False):
     events = get_important_events(debug=debug)
 
     if not events:
-        await context.bot.send_message(chat_id=chat_id, text="🔍 Сейчас нет важных новостей.", reply_markup=keyboard)
+        await context.bot.send_message(chat_id=chat_id, text="🔍 Сейчас нет важных новостей.", reply_markup=main_keyboard)
         return
 
     if "error" in events[0]:
-        await context.bot.send_message(chat_id=chat_id, text=f"⚠️ {events[0]['error']}", reply_markup=keyboard)
+        await context.bot.send_message(chat_id=chat_id, text=f"⚠️ {events[0]['error']}", reply_markup=main_keyboard)
         return
 
     for e in events:
@@ -183,7 +183,7 @@ async def send_digest(chat_id, context, debug=False):
             if is_bearish:
                 text += "\n\n⚠️ Возможный разворот тренда в медвежью фазу"
 
-        await context.bot.send_message(chat_id=chat_id, text=text, reply_markup=keyboard)
+        await context.bot.send_message(chat_id=chat_id, text=text, reply_markup=main_keyboard)
 
 async def auto_loop(app: Application):
     from telegram import InlineKeyboardMarkup
@@ -223,7 +223,7 @@ async def after_startup(app: Application):
         BotCommand("eth", "Прогноз по ETH"),
         BotCommand("alts", "Оценить альтсезон")
     ])
-    await app.bot.send_message(chat_id=CHAT_ID, text="🤖 Бот запущен. Я буду присылать макроэкономические события каждый час.", reply_markup=keyboard)
+    await app.bot.send_message(chat_id=CHAT_ID, text="🤖 Бот запущен. Я буду присылать макроэкономические события каждые 3 часа.", reply_markup=main_keyboard)
     asyncio.create_task(auto_loop(app))
 
 def main():
@@ -235,6 +235,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
