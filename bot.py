@@ -1,5 +1,6 @@
 import asyncio
 import os
+import requests
 from telegram import Update, ReplyKeyboardMarkup, BotCommand
 from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters
 from config import TELEGRAM_TOKEN, CHAT_ID, OPENAI_API_KEY
@@ -16,6 +17,7 @@ keyboard = ReplyKeyboardMarkup(
         ["🧠 Интерпретировать новости"],
         ["🔬 Посмотреть ожидаемые события"],
         ["📉 Прогноз по BTC", "📉 Прогноз по ETH"],
+        ["📊 Оценить альтсезон"],
         ["🔁 Перезапустить бота"]
     ],
     resize_keyboard=True,
@@ -42,6 +44,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif text == "📉 Прогноз по ETH":
         await update.message.reply_text("Введите текущую цену ETH (например, 3820):", reply_markup=keyboard)
         context.user_data["awaiting_eth_price"] = True
+    elif text == "📊 Оценить альтсезон":
+        await assess_altseason(update, context)
     elif context.user_data.get("awaiting_btc_price"):
         context.user_data["awaiting_btc_price"] = False
         try:
@@ -58,6 +62,39 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(forecast, reply_markup=keyboard)
         except ValueError:
             await update.message.reply_text("Некорректная цена. Введите число, например: 3820", reply_markup=keyboard)
+
+async def assess_altseason(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        r = requests.get("https://api.coingecko.com/api/v3/global", timeout=10)
+        data = r.json()
+        btc_d = round(data["data"]["market_cap_percentage"]["btc"], 2)
+        eth_d = round(data["data"]["market_cap_percentage"]["eth"], 2)
+
+        eth_btc_resp = requests.get("https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=btc", timeout=10)
+        eth_btc = round(eth_btc_resp.json()["ethereum"]["btc"], 5)
+
+        prompt = (
+            f"BTC Dominance: {btc_d}%\nETH Dominance: {eth_d}%\nETH/BTC: {eth_btc}\n"
+            "На основе этих показателей оцени, насколько вероятен альтсезон."
+            " Ответь кратко: 1) оценка вероятности, 2) аргументы, 3) общее заключение."
+        )
+
+        response = await client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": prompt}]
+        )
+
+        result = (
+            f"📊 Оценка альтсезона:\n\n"
+            f"▪️ BTC Dominance: {btc_d}%\n"
+            f"▪️ ETH Dominance: {eth_d}%\n"
+            f"▪️ ETH/BTC: {eth_btc}\n\n"
+            f"🧠 GPT: {response.choices[0].message.content.strip()}"
+        )
+        await update.message.reply_text(result, reply_markup=keyboard)
+
+    except Exception as e:
+        await update.message.reply_text(f"⚠️ Ошибка при оценке альтсезона: {e}", reply_markup=keyboard)
 
 async def gpt_price_forecast(asset, price):
     prompt = (
@@ -160,7 +197,8 @@ async def after_startup(app: Application):
         BotCommand("digest", "Интерпретировать новости"),
         BotCommand("upcoming", "Ожидаемые события"),
         BotCommand("btc", "Прогноз по BTC"),
-        BotCommand("eth", "Прогноз по ETH")
+        BotCommand("eth", "Прогноз по ETH"),
+        BotCommand("alts", "Оценить альтсезон")
     ])
     await app.bot.send_message(chat_id=CHAT_ID, text="🤖 Бот запущен. Я буду присылать макроэкономические события каждый час.", reply_markup=keyboard)
     asyncio.create_task(auto_loop(app))
@@ -174,6 +212,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
