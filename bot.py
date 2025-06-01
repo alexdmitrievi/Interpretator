@@ -71,7 +71,12 @@ async def assess_altseason(update: Update, context: ContextTypes.DEFAULT_TYPE):
         eth_d = round(data["data"]["market_cap_percentage"]["eth"], 2)
 
         eth_btc_resp = requests.get("https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=btc", timeout=10)
-        eth_btc = round(eth_btc_resp.json()["ethereum"]["btc"], 5)
+        eth_btc_data = eth_btc_resp.json()
+
+        if "ethereum" not in eth_btc_data or "btc" not in eth_btc_data["ethereum"]:
+            raise ValueError("Пара ETH/BTC не найдена в ответе CoinGecko")
+
+        eth_btc = round(eth_btc_data["ethereum"]["btc"], 5)
 
         prompt = (
             f"BTC Dominance: {btc_d}%\nETH Dominance: {eth_d}%\nETH/BTC: {eth_btc}\n"
@@ -94,6 +99,7 @@ async def assess_altseason(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(result, reply_markup=keyboard)
 
     except Exception as e:
+        print(f"[ОШИБКА альтсезона]: {e}")
         await update.message.reply_text(f"⚠️ Ошибка при оценке альтсезона: {e}", reply_markup=keyboard)
 
 async def gpt_price_forecast(asset, price):
@@ -186,9 +192,9 @@ async def auto_loop(app: Application):
             await send_digest(CHAT_ID, app, debug=False)
             moscow = pytz.timezone("Europe/Moscow")
             now = datetime.now(moscow).strftime("%H:%M")
-            await app.bot.send_message(chat_id=CHAT_ID, text=f"⏰ Цикл завершён в {now} (МСК). Следующее обновление через 60 минут.", reply_markup=keyboard)
+            await app.bot.send_message(chat_id=chat_id, text=f"⏰ Цикл завершён в {now} (МСК). Следующее обновление через 60 минут.", reply_markup=keyboard)
         except Exception as e:
-            await app.bot.send_message(chat_id=CHAT_ID, text=f"❌ Ошибка: {e}", reply_markup=keyboard)
+            await context.bot.send_message(chat_id=chat_id, text=f"❌ Ошибка: {e}", reply_markup=keyboard)
         await asyncio.sleep(3600)
 
 async def after_startup(app: Application):
@@ -212,6 +218,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
