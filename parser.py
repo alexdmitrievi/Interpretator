@@ -1,6 +1,8 @@
 import requests
 from bs4 import BeautifulSoup
 from interpreter import interpret_event
+from datetime import datetime
+import pytz
 
 def get_important_events(debug=False):
     url = "https://www.investing.com/economic-calendar/"
@@ -32,7 +34,16 @@ def get_important_events(debug=False):
 
         try:
             event = row.select_one(".event").text.strip()
-            time = row.get("data-event-datetime")
+            time_raw = row.get("data-event-datetime")
+
+            # Преобразуем UTC-время в МСК
+            if time_raw:
+                utc_dt = datetime.strptime(time_raw, "%Y-%m-%d %H:%M:%S").replace(tzinfo=pytz.utc)
+                local_dt = utc_dt.astimezone(pytz.timezone("Europe/Moscow"))
+                time_str = local_dt.strftime("%Y-%m-%d %H:%M:%S (%Z)")
+            else:
+                time_str = "—"
+
             actual_tag = row.select_one(".actual")
             forecast_tag = row.select_one(".forecast")
 
@@ -46,7 +57,7 @@ def get_important_events(debug=False):
 
                 results.append({
                     "event": event,
-                    "time": time,
+                    "time": time_str,
                     "actual": actual,
                     "forecast": forecast,
                     "summary": summary,
@@ -56,7 +67,7 @@ def get_important_events(debug=False):
             elif debug:
                 results.append({
                     "event": event,
-                    "time": time,
+                    "time": time_str,
                     "actual": actual or "–",
                     "forecast": forecast or "–",
                     "summary": "Ожидается событие",
@@ -67,6 +78,7 @@ def get_important_events(debug=False):
             continue
 
     return results
+
 
 
 
