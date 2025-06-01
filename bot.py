@@ -21,14 +21,9 @@ from interpreter import btc_eth_forecast
 
 from openai import AsyncOpenAI
 
-print("[DEBUG] OPENAI_API_KEY =", OPENAI_API_KEY)
-print("[DEBUG] OPENAI_ORG_ID =", OPENAI_ORG_ID)
-print("[DEBUG] OPENAI_PROJECT_ID =", OPENAI_PROJECT_ID)
-
 client = AsyncOpenAI(
     api_key=OPENAI_API_KEY,
     default_headers={
-        "OpenAI-Organization": OPENAI_ORG_ID,
         "OpenAI-Project": OPENAI_PROJECT_ID
     }
 )
