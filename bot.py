@@ -51,24 +51,43 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif text == "📊 Оценить альтсезон":
         try:
-            global_data = requests.get("https://api.coingecko.com/api/v3/global").json()
+            global_data = requests.get("https://api.coingecko.com/api/v3/global", timeout=10).json()
+
+            if "data" not in global_data:
+                raise ValueError(f"Некорректный ответ от CoinGecko: {global_data}")
+
             btc_d = round(global_data["data"]["market_cap_percentage"]["btc"], 2)
             eth_d = round(global_data["data"]["market_cap_percentage"]["eth"], 2)
-            eth_btc = round(
-                requests.get("https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=btc").json()["ethereum"]["btc"],
-                5
+
+            eth_btc_resp = requests.get(
+                "https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=btc",
+                timeout=10
             )
+            eth_btc_data = eth_btc_resp.json()
+            eth_btc = round(eth_btc_data["ethereum"]["btc"], 5)
+
             prompt = (
-                f"BTC Dominance: {btc_d}%\nETH Dominance: {eth_d}%\nETH/BTC: {eth_btc}\n"
+                f"BTC Dominance: {btc_d}%
+ETH Dominance: {eth_d}%
+ETH/BTC: {eth_btc}
+"
                 "Оцени вероятность альтсезона."
             )
             response = await client.chat.completions.create(
                 model="gpt-3.5-turbo",
                 messages=[{"role": "user", "content": prompt}]
             )
-            await update.message.reply_text(f"📊 Альтсезон:\n\n{response.choices[0].message.content.strip()}", reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True))
+            await update.message.reply_text(
+                f"📊 Альтсезон:
+
+{response.choices[0].message.content.strip()}",
+                reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True)
+            )
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}", reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True))
+            await update.message.reply_text(
+                f"⚠️ Ошибка при получении данных альтсезона: {e}",
+                reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True)
+            )
 
     elif text == "🧠 Интерпретировать новости":
         waiting_users.add(user_id)
