@@ -5,4 +5,4 @@ lxml
 python-dotenv
 httpx
 pytz
-openai
+openai>=1.0.0
