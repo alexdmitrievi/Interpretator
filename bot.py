@@ -35,7 +35,8 @@ async def gpt_interpretation(event, actual, forecast):
         f"Событие: {event}\n"
         f"Факт: {actual}, Прогноз: {forecast}\n"
         "1. Как это может повлиять на доллар, фондовый рынок и криптовалюту?\n"
-        "2. Может ли это событие стать катализатором для притока ликвидности или начала сильного бычьего тренда?\n"
+        "2. Может ли это событие стать катализатором для притока ликвидности и бычьего тренда?\n"
+        "3. Может ли это событие спровоцировать разворот и возвращение к медвежьему рынку?\n"
         "Ответь кратко, но по существу."
     )
     try:
@@ -45,12 +46,14 @@ async def gpt_interpretation(event, actual, forecast):
         )
         content = response.choices[0].message.content.strip()
 
-        # Простейшая эвристика для поиска ключевого сигнала
-        is_catalyst = "катализатор" in content.lower() or "приток ликвидности" in content.lower() or "сильный рост" in content.lower()
+        # Определение сигнала по ключевым словам
+        text_lower = content.lower()
+        is_bullish = any(word in text_lower for word in ["катализатор", "приток ликвидности", "сильный рост"])
+        is_bearish = any(word in text_lower for word in ["разворот", "медвежий", "обвал", "уход в риски"])
 
-        return content, is_catalyst
+        return content, is_bullish, is_bearish
     except Exception as e:
-        return f"⚠️ Ошибка GPT: {e}", False
+        return f"⚠️ Ошибка GPT: {e}", False, False
 
 async def send_digest(chat_id, context, debug=False):
     events = get_important_events(debug=debug)
@@ -84,10 +87,12 @@ async def send_digest(chat_id, context, debug=False):
                 pass
 
         if not debug:
-            gpt_comment, is_catalyst = await gpt_interpretation(e['event'], e['actual'], e['forecast'])
+            gpt_comment, is_bullish, is_bearish = await gpt_interpretation(e['event'], e['actual'], e['forecast'])
             text += f"\n\n🧠 Мнение аналитика:\n{gpt_comment}"
-            if is_catalyst:
-                text += "\n\n🚀 Потенциальный катализатор тренда"
+            if is_bullish:
+                text += "\n\n🚀 Потенциальный катализатор роста"
+            if is_bearish:
+                text += "\n\n⚠️ Возможный разворот тренда в медвежью фазу"
 
         await context.bot.send_message(chat_id=chat_id, text=text)
 
@@ -116,6 +121,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
