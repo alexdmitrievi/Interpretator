@@ -1,5 +1,4 @@
 import asyncio
-import openai
 import os
 from telegram import Update, ReplyKeyboardMarkup, BotCommand
 from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters
@@ -8,14 +7,15 @@ from parser import get_important_events
 from datetime import datetime
 import pytz
 from interpreter import btc_eth_forecast
+from openai import AsyncOpenAI
 
-openai.api_key = OPENAI_API_KEY
+client = AsyncOpenAI(api_key=OPENAI_API_KEY)
 
 keyboard = ReplyKeyboardMarkup(
     [
         ["🧠 Интерпретировать новости"],
         ["🔬 Посмотреть ожидаемые события"],
-        ["📉 Прогноз по BTC"],
+        ["📉 Прогноз по BTC", "📉 Прогноз по ETH"],
         ["🔁 Перезапустить бота"]
     ],
     resize_keyboard=True,
@@ -24,8 +24,7 @@ keyboard = ReplyKeyboardMarkup(
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "👋 Привет! Я интерпретирую макроэкономические новости.\n"
-        "Выбери действие ниже:",
+        "👋 Привет! Я интерпретирую макроэкономические новости.\nВыбери действие ниже:",
         reply_markup=keyboard
     )
 
@@ -40,31 +39,41 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif text == "📉 Прогноз по BTC":
         await update.message.reply_text("Введите текущую цену BTC (например, 104230):", reply_markup=keyboard)
         context.user_data["awaiting_btc_price"] = True
+    elif text == "📉 Прогноз по ETH":
+        await update.message.reply_text("Введите текущую цену ETH (например, 3820):", reply_markup=keyboard)
+        context.user_data["awaiting_eth_price"] = True
     elif context.user_data.get("awaiting_btc_price"):
         context.user_data["awaiting_btc_price"] = False
         try:
             price = float(text.replace(",", ".").replace("$", "").strip())
-            forecast = await gpt_btc_forecast(price)
+            forecast = await gpt_price_forecast("BTC", price)
             await update.message.reply_text(forecast, reply_markup=keyboard)
         except ValueError:
             await update.message.reply_text("Некорректная цена. Введите число, например: 103500", reply_markup=keyboard)
+    elif context.user_data.get("awaiting_eth_price"):
+        context.user_data["awaiting_eth_price"] = False
+        try:
+            price = float(text.replace(",", ".").replace("$", "").strip())
+            forecast = await gpt_price_forecast("ETH", price)
+            await update.message.reply_text(forecast, reply_markup=keyboard)
+        except ValueError:
+            await update.message.reply_text("Некорректная цена. Введите число, например: 3820", reply_markup=keyboard)
 
-async def gpt_btc_forecast(price):
+async def gpt_price_forecast(asset, price):
     prompt = (
-        f"Цена BTC: ${price}\n"
-        "На основе типичных рыночных условий и поведения крипторынка оцени:")
-    prompt += (
-        "\n1. Возможна ли техническая коррекция и до каких уровней?"
-        "\n2. Каков риск медвежьего разворота?"
-        "\n3. Сохраняется ли бычья структура?"
-        "\nОтветь кратко и по пунктам."
+        f"Цена {asset}: ${price}\n"
+        "На основе типичных рыночных условий и поведения крипторынка оцени:\n"
+        "1. Возможна ли техническая коррекция и до каких уровней?\n"
+        "2. Каков риск медвежьего разворота?\n"
+        "3. Сохраняется ли бычья структура?\n"
+        "Ответь кратко и по пунктам."
     )
     try:
-        response = await openai.ChatCompletion.acreate(
+        response = await client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[{"role": "user", "content": prompt}]
         )
-        return f"📉 Прогноз по BTC:\n\n{response.choices[0].message.content.strip()}"
+        return f"📉 Прогноз по {asset}:\n\n{response.choices[0].message.content.strip()}"
     except Exception as e:
         return f"⚠️ Ошибка GPT: {e}"
 
@@ -78,7 +87,7 @@ async def gpt_interpretation(event, actual, forecast):
         "Ответь кратко, но по существу."
     )
     try:
-        response = await openai.ChatCompletion.acreate(
+        response = await client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[{"role": "user", "content": prompt}]
         )
@@ -150,7 +159,8 @@ async def after_startup(app: Application):
         BotCommand("start", "Перезапустить бота"),
         BotCommand("digest", "Интерпретировать новости"),
         BotCommand("upcoming", "Ожидаемые события"),
-        BotCommand("btc", "Прогноз по BTC")
+        BotCommand("btc", "Прогноз по BTC"),
+        BotCommand("eth", "Прогноз по ETH")
     ])
     await app.bot.send_message(chat_id=CHAT_ID, text="🤖 Бот запущен. Я буду присылать макроэкономические события каждый час.", reply_markup=keyboard)
     asyncio.create_task(auto_loop(app))
@@ -164,6 +174,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
