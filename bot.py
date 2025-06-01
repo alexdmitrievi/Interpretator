@@ -209,29 +209,25 @@ async def auto_loop(app: Application):
 
     await asyncio.sleep(60)  # Подождать минуту после запуска
 
-    keyboard = InlineKeyboardMarkup([])  # Замените на нужные кнопки, если они есть
-
     while True:
         try:
-            await send_digest(CHAT_ID, app, debug=False)
+            await send_digest(OWNER_ID, app, debug=False)
 
             moscow = pytz.timezone("Europe/Moscow")
             now = datetime.now(moscow).strftime("%H:%M")
 
             await app.bot.send_message(
-                chat_id=CHAT_ID,
-                text=f"⏰ Цикл завершён в {now} (МСК). Следующее обновление через 3 часа.",
-                reply_markup=keyboard
+                chat_id=OWNER_ID,
+                text=f"⏰ Цикл завершён в {now} (МСК). Следующее обновление через 3 часа."
             )
 
         except Exception as e:
             await app.bot.send_message(
-                chat_id=CHAT_ID,
-                text=f"❌ Ошибка: {e}",
-                reply_markup=keyboard
+                chat_id=OWNER_ID,
+                text=f"❌ Ошибка: {e}"
             )
 
-        await asyncio.sleep(3 * 3600)  # Подождать 3 часа до следующего запуска
+        await asyncio.sleep(3 * 3600)
 
 async def after_startup(app: Application):
     await app.bot.set_my_commands([
@@ -243,7 +239,8 @@ async def after_startup(app: Application):
         BotCommand("alts", "Оценить альтсезон"),
         BotCommand("publish", "Опубликовать приветственный пост")
     ])
-    await app.bot.send_message(chat_id=CHAT_ID, text="🤖 Бот запущен. Я буду присылать макроэкономические события каждые 3 часа.", reply_markup=main_keyboard)
+
+    # Запускаем только авторассылку в личку OWNER_ID
     asyncio.create_task(auto_loop(app))
 
 def main():
