@@ -34,16 +34,23 @@ async def gpt_interpretation(event, actual, forecast):
     prompt = (
         f"Событие: {event}\n"
         f"Факт: {actual}, Прогноз: {forecast}\n"
-        "Дай краткий комментарий как аналитик: как это может повлиять на доллар, фондовый рынок и криптовалюту?"
+        "1. Как это может повлиять на доллар, фондовый рынок и криптовалюту?\n"
+        "2. Может ли это событие стать катализатором для притока ликвидности или начала сильного бычьего тренда?\n"
+        "Ответь кратко, но по существу."
     )
     try:
         response = await openai.ChatCompletion.acreate(
             model="gpt-3.5-turbo",
             messages=[{"role": "user", "content": prompt}]
         )
-        return response.choices[0].message.content.strip()
+        content = response.choices[0].message.content.strip()
+
+        # Простейшая эвристика для поиска ключевого сигнала
+        is_catalyst = "катализатор" in content.lower() or "приток ликвидности" in content.lower() or "сильный рост" in content.lower()
+
+        return content, is_catalyst
     except Exception as e:
-        return f"⚠️ Ошибка GPT: {e}"
+        return f"⚠️ Ошибка GPT: {e}", False
 
 async def send_digest(chat_id, context, debug=False):
     events = get_important_events(debug=debug)
@@ -77,8 +84,10 @@ async def send_digest(chat_id, context, debug=False):
                 pass
 
         if not debug:
-            gpt_comment = await gpt_interpretation(e['event'], e['actual'], e['forecast'])
+            gpt_comment, is_catalyst = await gpt_interpretation(e['event'], e['actual'], e['forecast'])
             text += f"\n\n🧠 Мнение аналитика:\n{gpt_comment}"
+            if is_catalyst:
+                text += "\n\n🚀 Потенциальный катализатор тренда"
 
         await context.bot.send_message(chat_id=chat_id, text=text)
 
@@ -107,6 +116,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
