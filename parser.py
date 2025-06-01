@@ -18,6 +18,7 @@ def get_important_events(debug=False):
 
     soup = BeautifulSoup(r.text, 'lxml')
     results = []
+    parse_errors = 0
 
     for row in soup.select("tr.js-event-item"):
         sentiment = row.select_one(".sentiment")
@@ -71,10 +72,16 @@ def get_important_events(debug=False):
                     "probability": 0,
                     "bulls": bulls
                 })
-        except:
+        except Exception as e:
+            parse_errors += 1
+            print(f"[Парсер: ошибка при обработке строки] {e}")
             continue
 
+    if debug and parse_errors > 0:
+        print(f"⚠️ Обнаружено ошибок при парсинге: {parse_errors}")
+
     return results
+
 
 
 
