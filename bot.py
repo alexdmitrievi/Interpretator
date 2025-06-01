@@ -1,16 +1,31 @@
 import asyncio
 import os
 import requests
-from telegram import Update, ReplyKeyboardMarkup, BotCommand, InlineKeyboardMarkup, InlineKeyboardButton
-from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters
-from config import TELEGRAM_TOKEN, CHAT_ID, OPENAI_API_KEY, OWNER_ID
-from parser import get_important_events
 from datetime import datetime
 import pytz
+
+from telegram import Update, ReplyKeyboardMarkup, BotCommand, InlineKeyboardMarkup, InlineKeyboardButton
+from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters
+
+from config import (
+    TELEGRAM_TOKEN,
+    CHAT_ID,
+    OWNER_ID,
+    OPENAI_API_KEY,
+    OPENAI_ORG_ID,
+    OPENAI_PROJECT_ID
+)
+
+from parser import get_important_events
 from interpreter import btc_eth_forecast
+
 from openai import AsyncOpenAI
 
-client = AsyncOpenAI(api_key=OPENAI_API_KEY)
+client = AsyncOpenAI(
+    api_key=OPENAI_API_KEY,
+    organization=OPENAI_ORG_ID,
+    project=OPENAI_PROJECT_ID
+)
 
 main_keyboard = ReplyKeyboardMarkup(
     [
