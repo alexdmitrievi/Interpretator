@@ -12,7 +12,7 @@ from interpreter import btc_eth_forecast
 openai.api_key = OPENAI_API_KEY
 
 keyboard = ReplyKeyboardMarkup(
-    [["🧠 Интерпретировать новости"]],
+    [["🧠 Интерпретировать новости"], ["🔬 Посмотреть ожидаемые события"]],
     resize_keyboard=True,
     one_time_keyboard=False
 )
@@ -26,7 +26,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message.text == "🧠 Интерпретировать новости":
-        await send_digest(update.effective_chat.id, context)
+        await send_digest(update.effective_chat.id, context, debug=False)
+    elif update.message.text == "🔬 Посмотреть ожидаемые события":
+        await send_digest(update.effective_chat.id, context, debug=True)
 
 async def gpt_interpretation(event, actual, forecast):
     prompt = (
@@ -43,8 +45,8 @@ async def gpt_interpretation(event, actual, forecast):
     except Exception as e:
         return f"⚠️ Ошибка GPT: {e}"
 
-async def send_digest(chat_id, context):
-    events = get_important_events()
+async def send_digest(chat_id, context, debug=False):
+    events = get_important_events(debug=debug)
 
     if not events:
         await context.bot.send_message(chat_id=chat_id, text="🔍 Сейчас нет важных новостей.")
@@ -66,13 +68,17 @@ async def send_digest(chat_id, context):
             f"🔮 Вероятность: {e['probability']}%"
         )
 
-        if e.get("bulls") == 3:
-            delta = float(e['actual']) - float(e['forecast'])
-            forecast = btc_eth_forecast(e['event'], delta)
-            text += f"\n\n💡 {forecast}"
+        if not debug and e.get("bulls") == 3:
+            try:
+                delta = float(e['actual']) - float(e['forecast'])
+                forecast = btc_eth_forecast(e['event'], delta)
+                text += f"\n\n💡 {forecast}"
+            except:
+                pass
 
-        gpt_comment = await gpt_interpretation(e['event'], e['actual'], e['forecast'])
-        text += f"\n\n🧠 Мнение аналитика:\n{gpt_comment}"
+        if not debug:
+            gpt_comment = await gpt_interpretation(e['event'], e['actual'], e['forecast'])
+            text += f"\n\n🧠 Мнение аналитика:\n{gpt_comment}"
 
         await context.bot.send_message(chat_id=chat_id, text=text)
 
@@ -80,7 +86,7 @@ async def auto_loop(app: Application):
     await asyncio.sleep(60)
     while True:
         try:
-            await send_digest(CHAT_ID, app)
+            await send_digest(CHAT_ID, app, debug=False)
             moscow = pytz.timezone("Europe/Moscow")
             now = datetime.now(moscow).strftime("%H:%M")
             await app.bot.send_message(chat_id=CHAT_ID, text=f"⏰ Цикл завершён в {now} (МСК). Следующее обновление через 60 минут.")
@@ -101,6 +107,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 

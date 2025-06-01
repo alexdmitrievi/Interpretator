@@ -2,7 +2,7 @@ import requests
 from bs4 import BeautifulSoup
 from interpreter import interpret_event
 
-def get_important_events():
+def get_important_events(debug=False):
     url = "https://www.investing.com/economic-calendar/"
     headers = {'User-Agent': 'Mozilla/5.0'}
 
@@ -12,13 +12,12 @@ def get_important_events():
     except Exception as e:
         error_message = f"[Ошибка подключения к Investing.com]: {e}"
         print(error_message)
-        return [{"error": error_message}]  # возвращаем ошибку в bot.py
+        return [{"error": error_message}]
 
     soup = BeautifulSoup(r.text, 'lxml')
     results = []
 
     for row in soup.select("tr.js-event-item"):
-        # Находим уровень важности по title в .sentiment
         sentiment = row.select_one(".sentiment")
         if not sentiment:
             continue
@@ -29,7 +28,7 @@ def get_important_events():
         elif "high" in title:
             bulls = 3
         else:
-            continue  # пропускаем low impact или неизвестные
+            continue
 
         try:
             event = row.select_one(".event").text.strip()
@@ -37,11 +36,8 @@ def get_important_events():
             actual_tag = row.select_one(".actual")
             forecast_tag = row.select_one(".forecast")
 
-            if not actual_tag or not forecast_tag:
-                continue
-
-            actual = actual_tag.text.strip().replace('%', '').replace(',', '.')
-            forecast = forecast_tag.text.strip().replace('%', '').replace(',', '.')
+            actual = actual_tag.text.strip().replace('%', '').replace(',', '.') if actual_tag else ""
+            forecast = forecast_tag.text.strip().replace('%', '').replace(',', '.') if forecast_tag else ""
 
             if actual and forecast:
                 actual_val = float(actual)
@@ -57,9 +53,21 @@ def get_important_events():
                     "probability": probability,
                     "bulls": bulls
                 })
+            elif debug:
+                results.append({
+                    "event": event,
+                    "time": time,
+                    "actual": actual or "–",
+                    "forecast": forecast or "–",
+                    "summary": "Ожидается событие",
+                    "probability": 0,
+                    "bulls": bulls
+                })
         except:
             continue
 
     return results
+
+
 
 
