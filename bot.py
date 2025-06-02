@@ -14,8 +14,8 @@ client = AsyncOpenAI(api_key=OPENAI_API_KEY)
 reply_keyboard = [["🧠 Интерпретировать новости"], ["📉 Прогноз по BTC", "📉 Прогноз по ETH"], ["📊 Оценить альтсезон"]]
 menu_keyboard = [["🔁 Перезапустить бота"], ["📢 Опубликовать пост"]]
 
-# Пользователи, которые ждут автоматическую интерпретацию следующей новости
 waiting_users = set()
+DEBUG_MODE = False  # ✅ Меняй на True для теста, чтобы проверка шла каждые 10 сек
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("👋 Привет! Выбери действие ниже:", reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True))
@@ -52,41 +52,26 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif text == "📊 Оценить альтсезон":
         try:
             global_data = requests.get("https://api.coingecko.com/api/v3/global", timeout=10).json()
-
             if "data" not in global_data:
                 raise ValueError(f"Некорректный ответ от CoinGecko: {global_data}")
-
             btc_d = round(global_data["data"]["market_cap_percentage"]["btc"], 2)
             eth_d = round(global_data["data"]["market_cap_percentage"]["eth"], 2)
-
-            eth_btc_resp = requests.get(
-                "https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=btc",
-                timeout=10
-            )
+            eth_btc_resp = requests.get("https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=btc", timeout=10)
             eth_btc_data = eth_btc_resp.json()
             eth_btc = round(eth_btc_data["ethereum"]["btc"], 5)
-
             prompt = (
                 f"BTC Dominance: {btc_d}%\n"
                 f"ETH Dominance: {eth_d}%\n"
                 f"ETH/BTC: {eth_btc}\n"
                 "Оцени вероятность альтсезона."
             )
-
             response = await client.chat.completions.create(
                 model="gpt-3.5-turbo",
                 messages=[{"role": "user", "content": prompt}]
             )
-            await update.message.reply_text(
-                f"📊 Альтсезон:\n\n{response.choices[0].message.content.strip()}",
-                reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True)
-            )
+            await update.message.reply_text(f"📊 Альтсезон:\n\n{response.choices[0].message.content.strip()}", reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True))
         except Exception as e:
-            await update.message.reply_text(
-                f"⚠️ Ошибка при получении данных альтсезона: {e}",
-                reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True)
-            )
-
+            await update.message.reply_text(f"⚠️ Ошибка при получении данных: {e}", reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True))
 
     elif text == "🧠 Интерпретировать новости":
         waiting_users.add(user_id)
@@ -120,9 +105,13 @@ async def hourly_news_check(app):
     await asyncio.sleep(10)
     while True:
         try:
-            events = get_important_events(debug=False)
+            events = get_important_events(debug=DEBUG_MODE)
+            if DEBUG_MODE:
+                print(f"[DEBUG] Получено событий: {len(events)}")
             for e in events:
-                if e.get("actual") and e.get("forecast") and e.get("bulls", 0) == 3:
+                if DEBUG_MODE:
+                    print(f"[DEBUG] Событие: {e.get('event')} | Факт: {e.get('actual')} | Прогноз: {e.get('forecast')} | Время: {e.get('time')} | bulls: {e.get('bulls')}")
+                if e.get("bulls", 0) == 3 and e.get("actual") and e.get("forecast"):
                     try:
                         event = e['event']
                         actual = float(e['actual'].replace(',', '.').replace('%', ''))
@@ -144,16 +133,15 @@ async def hourly_news_check(app):
                             f"{e['summary']}\n\n"
                             f"🧠 Интерпретация GPT:\n{interpretation}"
                         )
-                        # отправляем только тем, кто ждёт интерпретацию
                         for user_id in waiting_users:
                             await app.bot.send_message(chat_id=user_id, text=summary, reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True))
                         waiting_users.clear()
                     except Exception as ex:
-                        logging.error(f"Ошибка автоинтерпретации: {ex}")
+                        logging.error(f"[ERROR] Ошибка автоинтерпретации: {ex}")
                         continue
         except Exception as e:
-            logging.error(f"Ошибка в парсинге новостей: {e}")
-        await asyncio.sleep(3600)
+            logging.error(f"[ERROR] Ошибка в парсинге новостей: {e}")
+        await asyncio.sleep(10 if DEBUG_MODE else 3600)
 
 async def post_init(app):
     await app.bot.set_my_commands([
