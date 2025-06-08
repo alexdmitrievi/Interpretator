@@ -147,8 +147,7 @@ async def post_init(app):
         BotCommand("start", "Перезапустить бота"),
         BotCommand("publish", "Опубликовать пост")
     ])
-
-	hourly_news_check_task = asyncio.create_task(hourly_news_check(app))
+    asyncio.create_task(hourly_news_check(app))
 
 async def hourly_news_check(app):
     await asyncio.sleep(10)
