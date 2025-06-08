@@ -110,7 +110,10 @@ def parse_event_page(url: str):
                 forecast = cols[1].text.strip()
 
         if not actual or not forecast:
-            return {"error": "Не удалось найти факт и прогноз на странице."}
+            return {
+                "event": event_name,
+                "summary": "⏳ Ожидается публикация макроэкономических данных. Пока без интерпретации."
+            }
 
         actual_val = float(actual.replace("%", "").replace(",", "."))
         forecast_val = float(forecast.replace("%", "").replace(",", "."))
@@ -126,6 +129,7 @@ def parse_event_page(url: str):
         }
     except Exception as e:
         return {"error": f"Ошибка парсинга страницы: {e}"}
+
 
 
 

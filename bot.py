@@ -39,6 +39,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(f"⚠️ {result['error']}", reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True))
             return
 
+        if "actual" not in result or "forecast" not in result:
+            msg = f"📊 Событие: {result['event']}\n{result['summary']}"
+            await update.message.reply_text(msg, reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True))
+            return
+
         msg = (
             f"📊 Событие: {result['event']}\n"
             f"Факт: {result['actual']} | Прогноз: {result['forecast']}\n"
@@ -70,9 +75,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if text == "📉 Прогноз по BTC":
         context.user_data["price_asset"] = "BTC"
         await update.message.reply_text("Введите текущую цену BTC (например, 103500):")
+
     elif text == "📉 Прогноз по ETH":
         context.user_data["price_asset"] = "ETH"
         await update.message.reply_text("Введите цену ETH (например, 3820):")
+
     elif "price_asset" in context.user_data:
         try:
             price = float(text.replace(",", ".").replace("$", ""))
@@ -154,7 +161,6 @@ async def post_init(app):
 
 async def hourly_news_check(app):
     await asyncio.sleep(10)
-    # placeholder if needed later
     return
 
 def main():
@@ -167,6 +173,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
