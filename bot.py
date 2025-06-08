@@ -20,7 +20,8 @@ waiting_link_users = set()
 DEBUG_MODE = False
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("\ud83d\udc4b Привет! Выбери действие ниже:", reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True))
+    logging.info(f"[COMMAND] /start от {update.effective_user.id}")
+    await update.message.reply_text("👋 Привет! Выбери действие ниже:", reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True))
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
@@ -29,13 +30,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if user_id in waiting_link_users and text.startswith("http"):
         waiting_link_users.remove(user_id)
         if "investing.com/economic-calendar" not in text:
-            await update.message.reply_text("\u26a0\ufe0f Это не похоже на ссылку на событие с Investing.com", reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True))
+            await update.message.reply_text("⚠️ Это не похоже на ссылку на событие с Investing.com", reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True))
             return
 
         await update.message.reply_text("⏳ Анализируем событие...")
         result = parse_event_page(text)
         if "error" in result:
-            await update.message.reply_text(f"\u26a0\ufe0f {result['error']}", reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True))
+            await update.message.reply_text(f"⚠️ {result['error']}", reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True))
             return
 
         msg = (
@@ -46,7 +47,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         delta = float(result['actual'].replace('%', '').replace(',', '.')) - float(result['forecast'].replace('%', '').replace(',', '.'))
         signal_btc, signal_eth = get_trading_signal(result['event'], delta)
-        msg += f"\n\ud83d\udcc8 Рекомендации:\n• BTC: {signal_btc}\n• ETH: {signal_eth}"
+        msg += f"\n📈 Рекомендации:\n• BTC: {signal_btc}\n• ETH: {signal_eth}"
 
         try:
             gpt_prompt = (
@@ -61,7 +62,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             gpt_text = gpt_response.choices[0].message.content.strip()
             msg += f"\n🧠 GPT: {gpt_text}"
         except Exception as e:
-            msg += f"\n\u26a0\ufe0f GPT-ошибка: {e}"
+            msg += f"\n⚠️ GPT-ошибка: {e}"
 
         await update.message.reply_text(msg, reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True))
         return
@@ -113,22 +114,23 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             await update.message.reply_text(f"📊 Альтсезон:\n\n{response.choices[0].message.content.strip()}", reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True))
         except Exception as e:
-            await update.message.reply_text(f"⚠\ufe0f Ошибка при получении данных: {e}", reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True))
+            await update.message.reply_text(f"⚠️ Ошибка при получении данных: {e}", reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True))
 
     elif text == "🧠 Интерпретировать новости":
         waiting_link_users.add(user_id)
-        await update.message.reply_text("📌 Пришлите ссылку на событие с Investing.com (например, https://ru.investing.com/economic-calendar/gdp-119)", reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True))
+        await update.message.reply_text("📎 Пришлите ссылку на событие с Investing.com (например, https://ru.investing.com/economic-calendar/gdp-119)", reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True))
 
     elif text == "🔁 Перезапустить бота":
         await start(update, context)
 
     elif text == "📢 Опубликовать пост":
-        await publish_post(update)
+        await publish_post(update, context)
 
     else:
         await update.message.reply_text("Выбери пункт из меню.", reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True))
 
-async def publish_post(update: Update):
+async def publish_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    logging.info(f"[COMMAND] /publish от {update.effective_user.id}")
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("🤖 Перейти к боту", url="https://t.me/Parser_newbot")]
     ])
@@ -143,6 +145,7 @@ async def publish_post(update: Update):
     await update.message.reply_text(text, reply_markup=keyboard)
 
 async def post_init(app):
+    logging.info("[INIT] post_init запущен")
     await app.bot.set_my_commands([
         BotCommand("start", "Перезапустить бота"),
         BotCommand("publish", "Опубликовать пост")
@@ -159,11 +162,12 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("publish", publish_post))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    print("\u2705 Бот запущен")
+    print("✅ Бот запущен")
     app.run_polling()
 
 if __name__ == "__main__":
     main()
+
 
 
 
