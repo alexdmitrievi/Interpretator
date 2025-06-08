@@ -26,63 +26,73 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
     user_id = update.effective_user.id
 
-if "investing.com/economic-calendar" in text:
-    import re
-    match = re.search(r"https?://[^\s]+", text)
-    if not match:
-        await update.message.reply_text("⚠️ Не удалось извлечь ссылку из текста.", reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True))
-        return
+    if "investing.com/economic-calendar" in text:
+        import re
+        match = re.search(r"https?://[^\s]+", text)
+        if not match:
+            await update.message.reply_text(
+                "⚠️ Не удалось извлечь ссылку из текста.",
+                reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True)
+            )
+            return
 
-    url = match.group(0)
-    await update.message.reply_text("⏳ Анализируем событие...")
-    result = parse_event_page(url)
+        url = match.group(0)
+        await update.message.reply_text("⏳ Анализируем событие...")
+        result = parse_event_page(url)
 
-    if "error" in result:
-        await update.message.reply_text(f"⚠️ {result['error']}", reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True))
-        return
+        if "error" in result:
+            await update.message.reply_text(
+                f"⚠️ {result['error']}",
+                reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True)
+            )
+            return
 
-    if "actual" not in result or "forecast" not in result:
-        msg = f"📊 Событие: {result['event']}\n{result['summary']}"
-        await update.message.reply_text(msg, reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True))
-        return
+        if "actual" not in result or "forecast" not in result:
+            msg = f"📊 Событие: {result['event']}\n{result['summary']}"
+            await update.message.reply_text(
+                msg,
+                reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True)
+            )
+            return
 
-    msg = (
-        f"📊 Событие: {result['event']}\n"
-        f"Факт: {result['actual']} | Прогноз: {result['forecast']}\n"
-        f"🧠 Интерпретация: {result['summary']}"
-    )
-
-    delta = float(result['actual'].replace('%', '').replace(',', '.')) - float(result['forecast'].replace('%', '').replace(',', '.'))
-    signal_btc, signal_eth = get_trading_signal(result['event'], delta)
-    msg += f"\n📈 Рекомендации:\n• BTC: {signal_btc}\n• ETH: {signal_eth}"
-
-    try:
-        gpt_prompt = (
-            f"Событие: {result['event']}\n"
+        msg = (
+            f"📊 Событие: {result['event']}\n"
             f"Факт: {result['actual']} | Прогноз: {result['forecast']}\n"
-            "Как это повлияет на доллар, рынок и криптовалюты? Кратко."
+            f"🧠 Интерпретация: {result['summary']}"
         )
-        gpt_response = await client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": gpt_prompt}]
+
+        delta = float(result['actual'].replace('%', '').replace(',', '.')) - float(result['forecast'].replace('%', '').replace(',', '.'))
+        signal_btc, signal_eth = get_trading_signal(result['event'], delta)
+        msg += f"\n📈 Рекомендации:\n• BTC: {signal_btc}\n• ETH: {signal_eth}"
+
+        try:
+            gpt_prompt = (
+                f"Событие: {result['event']}\n"
+                f"Факт: {result['actual']} | Прогноз: {result['forecast']}\n"
+                "Как это повлияет на доллар, рынок и криптовалюты? Кратко."
+            )
+            gpt_response = await client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[{"role": "user", "content": gpt_prompt}]
+            )
+            gpt_text = gpt_response.choices[0].message.content.strip()
+            msg += f"\n🧠 GPT: {gpt_text}"
+        except Exception as e:
+            msg += f"\n⚠️ GPT-ошибка: {e}"
+
+        await update.message.reply_text(
+            msg,
+            reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True)
         )
-        gpt_text = gpt_response.choices[0].message.content.strip()
-        msg += f"\n🧠 GPT: {gpt_text}"
-    except Exception as e:
-        msg += f"\n⚠️ GPT-ошибка: {e}"
+        return
 
-    await update.message.reply_text(msg, reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True))
-    return
-
-
+    # остальные действия, например:
     if text == "📉 Прогноз по BTC":
         context.user_data["price_asset"] = "BTC"
         await update.message.reply_text("Введите текущую цену BTC (например, 103500):")
-
     elif text == "📉 Прогноз по ETH":
         context.user_data["price_asset"] = "ETH"
         await update.message.reply_text("Введите цену ETH (например, 3820):")
-
     elif "price_asset" in context.user_data:
         try:
             price = float(text.replace(",", ".").replace("$", ""))
@@ -98,9 +108,15 @@ if "investing.com/economic-calendar" in text:
                 model="gpt-3.5-turbo",
                 messages=[{"role": "user", "content": prompt}]
             )
-            await update.message.reply_text(f"📉 Прогноз по {asset}:\n\n{response.choices[0].message.content.strip()}", reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True))
+            await update.message.reply_text(
+                f"📉 Прогноз по {asset}:\n\n{response.choices[0].message.content.strip()}",
+                reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True)
+            )
         except ValueError:
-            await update.message.reply_text("Введите корректную цену.", reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True))
+            await update.message.reply_text(
+                "Введите корректную цену.",
+                reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True)
+            )
 
     elif text == "📊 Оценить альтсезон":
         try:
@@ -122,12 +138,21 @@ if "investing.com/economic-calendar" in text:
                 model="gpt-3.5-turbo",
                 messages=[{"role": "user", "content": prompt}]
             )
-            await update.message.reply_text(f"📊 Альтсезон:\n\n{response.choices[0].message.content.strip()}", reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True))
+            await update.message.reply_text(
+                f"📊 Альтсезон:\n\n{response.choices[0].message.content.strip()}",
+                reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True)
+            )
         except Exception as e:
-            await update.message.reply_text(f"⚠️ Ошибка при получении данных: {e}", reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True))
+            await update.message.reply_text(
+                f"⚠️ Ошибка при получении данных: {e}",
+                reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True)
+            )
 
     elif text == "🧠 Интерпретировать новости":
-        await update.message.reply_text("📎 Пришлите ссылку на событие с Investing.com (например, https://ru.investing.com/economic-calendar/gdp-119)", reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True))
+        await update.message.reply_text(
+            "📎 Пришлите ссылку на событие с Investing.com (например, https://ru.investing.com/economic-calendar/gdp-119)",
+            reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True)
+        )
 
     elif text == "🔁 Перезапустить бота":
         await start(update, context)
@@ -136,7 +161,10 @@ if "investing.com/economic-calendar" in text:
         await publish_post(update, context)
 
     else:
-        await update.message.reply_text("Выбери пункт из меню.", reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True))
+        await update.message.reply_text(
+            "Выбери пункт из меню.",
+            reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True)
+        )
 
 async def publish_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logging.info(f"[COMMAND] /publish от {update.effective_user.id}")
