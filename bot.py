@@ -16,7 +16,6 @@ reply_keyboard = [["🧠 Интерпретировать новости"], ["�
 menu_keyboard = [["🔁 Перезапустить бота"], ["📢 Опубликовать пост"]]
 
 waiting_users = set()
-waiting_link_users = set()
 DEBUG_MODE = False
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -27,12 +26,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
     user_id = update.effective_user.id
 
-    if user_id in waiting_link_users and text.startswith("http"):
-        waiting_link_users.remove(user_id)
-        if "investing.com/economic-calendar" not in text:
-            await update.message.reply_text("⚠️ Это не похоже на ссылку на событие с Investing.com", reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True))
-            return
-
+    if "investing.com/economic-calendar" in text:
         await update.message.reply_text("⏳ Анализируем событие...")
         result = parse_event_page(text)
         if "error" in result:
@@ -124,7 +118,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(f"⚠️ Ошибка при получении данных: {e}", reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True))
 
     elif text == "🧠 Интерпретировать новости":
-        waiting_link_users.add(user_id)
         await update.message.reply_text("📎 Пришлите ссылку на событие с Investing.com (например, https://ru.investing.com/economic-calendar/gdp-119)", reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True))
 
     elif text == "🔁 Перезапустить бота":
@@ -173,6 +166,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
