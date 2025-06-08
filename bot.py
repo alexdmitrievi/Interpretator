@@ -5,7 +5,8 @@ from telegram import Update, BotCommand, InlineKeyboardMarkup, InlineKeyboardBut
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 from config import TELEGRAM_TOKEN, OPENAI_API_KEY
 from openai import AsyncOpenAI
-from parser import get_important_events
+from parser import get_important_events, parse_event_page
+from interpreter import interpret_event, get_trading_signal
 import re
 
 logging.basicConfig(level=logging.INFO)
@@ -15,14 +16,55 @@ reply_keyboard = [["🧠 Интерпретировать новости"], ["�
 menu_keyboard = [["🔁 Перезапустить бота"], ["📢 Опубликовать пост"]]
 
 waiting_users = set()
-DEBUG_MODE = False  # ✅ Меняй на True для теста, чтобы проверка шла каждые 10 сек
+waiting_link_users = set()
+DEBUG_MODE = False
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("👋 Привет! Выбери действие ниже:", reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True))
+    await update.message.reply_text("\ud83d\udc4b Привет! Выбери действие ниже:", reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True))
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
     user_id = update.effective_user.id
+
+    if user_id in waiting_link_users and text.startswith("http"):
+        waiting_link_users.remove(user_id)
+        if "investing.com/economic-calendar" not in text:
+            await update.message.reply_text("\u26a0\ufe0f Это не похоже на ссылку на событие с Investing.com", reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True))
+            return
+
+        await update.message.reply_text("⏳ Анализируем событие...")
+        result = parse_event_page(text)
+        if "error" in result:
+            await update.message.reply_text(f"\u26a0\ufe0f {result['error']}", reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True))
+            return
+
+        msg = (
+            f"📊 Событие: {result['event']}\n"
+            f"Факт: {result['actual']} | Прогноз: {result['forecast']}\n"
+            f"🧠 Интерпретация: {result['summary']}"
+        )
+
+        delta = float(result['actual'].replace('%', '').replace(',', '.')) - float(result['forecast'].replace('%', '').replace(',', '.'))
+        signal_btc, signal_eth = get_trading_signal(result['event'], delta)
+        msg += f"\n\ud83d\udcc8 Рекомендации:\n• BTC: {signal_btc}\n• ETH: {signal_eth}"
+
+        try:
+            gpt_prompt = (
+                f"Событие: {result['event']}\n"
+                f"Факт: {result['actual']} | Прогноз: {result['forecast']}\n"
+                "Как это повлияет на доллар, рынок и криптовалюты? Кратко."
+            )
+            gpt_response = await client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[{"role": "user", "content": gpt_prompt}]
+            )
+            gpt_text = gpt_response.choices[0].message.content.strip()
+            msg += f"\n🧠 GPT: {gpt_text}"
+        except Exception as e:
+            msg += f"\n\u26a0\ufe0f GPT-ошибка: {e}"
+
+        await update.message.reply_text(msg, reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True))
+        return
 
     if text == "📉 Прогноз по BTC":
         context.user_data["price_asset"] = "BTC"
@@ -71,11 +113,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             await update.message.reply_text(f"📊 Альтсезон:\n\n{response.choices[0].message.content.strip()}", reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True))
         except Exception as e:
-            await update.message.reply_text(f"⚠️ Ошибка при получении данных: {e}", reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True))
+            await update.message.reply_text(f"⚠\ufe0f Ошибка при получении данных: {e}", reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True))
 
     elif text == "🧠 Интерпретировать новости":
-        waiting_users.add(user_id)
-        await update.message.reply_text("⏳ Жду ближайшее важное событие. Интерпретация придёт автоматически!", reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True))
+        waiting_link_users.add(user_id)
+        await update.message.reply_text("📌 Пришлите ссылку на событие с Investing.com (например, https://ru.investing.com/economic-calendar/gdp-119)", reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True))
 
     elif text == "🔁 Перезапустить бота":
         await start(update, context)
@@ -100,66 +142,30 @@ async def publish_post(update: Update):
     )
     await update.message.reply_text(text, reply_markup=keyboard)
 
-async def hourly_news_check(app):
-    global waiting_users
-    await asyncio.sleep(10)
-    while True:
-        try:
-            events = get_important_events(debug=DEBUG_MODE)
-            if DEBUG_MODE:
-                print(f"[DEBUG] Получено событий: {len(events)}")
-            for e in events:
-                if DEBUG_MODE:
-                    print(f"[DEBUG] Событие: {e.get('event')} | Факт: {e.get('actual')} | Прогноз: {e.get('forecast')} | Время: {e.get('time')} | bulls: {e.get('bulls')}")
-                if e.get("bulls", 0) == 3 and e.get("actual") and e.get("forecast"):
-                    try:
-                        event = e['event']
-                        actual = float(e['actual'].replace(',', '.').replace('%', ''))
-                        forecast = float(e['forecast'].replace(',', '.').replace('%', ''))
-                        prompt = (
-                            f"Событие: {event}\n"
-                            f"Факт: {actual} | Прогноз: {forecast}\n\n"
-                            "Как это повлияет на доллар, рынок и крипту? Кратко."
-                        )
-                        response = await client.chat.completions.create(
-                            model="gpt-3.5-turbo",
-                            messages=[{"role": "user", "content": prompt}]
-                        )
-                        interpretation = response.choices[0].message.content.strip()
-                        summary = (
-                            f"🔔 Новость: {event}\n"
-                            f"🕒 Время: {e['time']}\n"
-                            f"Факт: {e['actual']} | Прогноз: {e['forecast']}\n"
-                            f"{e['summary']}\n\n"
-                            f"🧠 Интерпретация GPT:\n{interpretation}"
-                        )
-                        for user_id in waiting_users:
-                            await app.bot.send_message(chat_id=user_id, text=summary, reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True))
-                        waiting_users.clear()
-                    except Exception as ex:
-                        logging.error(f"[ERROR] Ошибка автоинтерпретации: {ex}")
-                        continue
-        except Exception as e:
-            logging.error(f"[ERROR] Ошибка в парсинге новостей: {e}")
-        await asyncio.sleep(10 if DEBUG_MODE else 3600)
-
 async def post_init(app):
     await app.bot.set_my_commands([
         BotCommand("start", "Перезапустить бота"),
         BotCommand("publish", "Опубликовать пост")
     ])
-    asyncio.create_task(hourly_news_check(app))
+
+	hourly_news_check_task = asyncio.create_task(hourly_news_check(app))
+
+async def hourly_news_check(app):
+    await asyncio.sleep(10)
+    # placeholder if needed later
+    return
 
 def main():
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).post_init(post_init).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("publish", publish_post))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    print("✅ Бот запущен")
+    print("\u2705 Бот запущен")
     app.run_polling()
 
 if __name__ == "__main__":
     main()
+
 
 
 

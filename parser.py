@@ -29,7 +29,7 @@ def get_important_events(debug=False):
         if "high" in title:
             bulls = 3
         else:
-            continue  # пропускаем всё, кроме high impact (3 звезды)
+            continue
 
         try:
             event = row.select_one(".event").text.strip()
@@ -81,6 +81,52 @@ def get_important_events(debug=False):
         print(f"⚠️ Обнаружено ошибок при парсинге: {parse_errors}")
 
     return results
+
+def parse_event_page(url: str):
+    headers = {'User-Agent': 'Mozilla/5.0'}
+    try:
+        r = requests.get(url, headers=headers, timeout=10)
+        r.raise_for_status()
+    except Exception as e:
+        return {"error": f"Ошибка при подключении: {e}"}
+
+    soup = BeautifulSoup(r.text, 'lxml')
+
+    try:
+        title_tag = soup.select_one("h1")
+        event_name = title_tag.text.strip() if title_tag else "Неизвестное событие"
+
+        actual = None
+        forecast = None
+
+        for row in soup.select("div[class*=genTbl] tr"):
+            cols = row.find_all("td")
+            if len(cols) < 2:
+                continue
+            label = cols[0].text.strip().lower()
+            if "факт" in label:
+                actual = cols[1].text.strip()
+            elif "прогноз" in label:
+                forecast = cols[1].text.strip()
+
+        if not actual or not forecast:
+            return {"error": "Не удалось найти факт и прогноз на странице."}
+
+        actual_val = float(actual.replace("%", "").replace(",", "."))
+        forecast_val = float(forecast.replace("%", "").replace(",", "."))
+
+        summary, probability = interpret_event(event_name, actual_val, forecast_val)
+
+        return {
+            "event": event_name,
+            "actual": actual,
+            "forecast": forecast,
+            "summary": summary,
+            "probability": probability
+        }
+    except Exception as e:
+        return {"error": f"Ошибка парсинга страницы: {e}"}
+
 
 
 
