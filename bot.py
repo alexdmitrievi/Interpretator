@@ -168,18 +168,23 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def publish_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logging.info(f"[COMMAND] /publish от {update.effective_user.id}")
+
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("🤖 Перейти к боту", url="https://t.me/Parser_newbot")]
+        [InlineKeyboardButton("🔥 Перейти к боту", url="https://t.me/Parser_newbot")]
     ])
+
     text = (
-        "👋 Добро пожаловать!\n\n"
-        "🔔 Здесь вы получите:\n"
-        "• Важные макроданные\n"
-        "• Интерпретации событий\n"
-        "• Торговые идеи и прогнозы\n\n"
-        "👇 Нажмите, чтобы начать"
+        "⚡ Скальпинг. Интрадей. Макроновости.\n\n"
+        "🎯 Здесь ты получаешь:\n"
+        "• Готовые точки входа по скальперским и позиционным сделкам\n"
+        "• Мгновенные сигналы BUY/SELL по BTC и ETH после новостей\n"
+        "• Интерпретации макроданных — CPI, ставка, безработица и т.д.\n\n"
+        "📈 Мы упрощаем рынок — ты видишь суть и входишь в сделку осознанно.\n"
+        "Без воды. Без задержек. Только торговля.\n\n"
+        "👇 Жми и заходи. Ты нам подойдёшь."
     )
-    await update.message.reply_text(text, reply_markup=keyboard)
+
+    await context.bot.send_message(chat_id='@mamkin_treder', text=text, reply_markup=keyboard)
 
 async def post_init(app):
     logging.info("[INIT] post_init запущен")
